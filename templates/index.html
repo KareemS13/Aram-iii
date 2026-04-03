@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lake Sevan Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:     #0a1628;
+      --navy-mid: #0d1e3d;
+      --white:    #ffffff;
+      --muted:    rgba(255,255,255,0.4);
+      --line:     rgba(255,255,255,0.07);
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Inter", sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      padding: 0 52px;
+      height: 68px;
+      background: rgba(10,22,40,0.80);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-logo { font-size: 1.15rem; font-weight: 700; color: var(--white); margin-right: auto; letter-spacing: -0.02em; }
+    .nav-logo span { opacity: 0.4; }
+    .nav-links { display: flex; gap: 40px; list-style: none; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.88rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--white); }
+    .nav-badge {
+      margin-left: 44px;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: var(--white);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 13px;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 0 60px 90px;
+      overflow: hidden;
+    }
+    #mesh-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .hero-content { position: relative; z-index: 2; }
+    .hero-eyebrow {
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    .hero-title {
+      font-size: clamp(3.2rem, 7vw, 6rem);
+      font-weight: 900;
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+    }
+    .hero-sub {
+      margin-top: 20px;
+      font-size: 0.95rem;
+      color: var(--muted);
+      max-width: 460px;
+      line-height: 1.65;
+    }
+    .scroll-hint {
+      position: absolute;
+      bottom: 32px;
+      right: 52px;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .scroll-hint::before {
+      content: "";
+      display: block;
+      width: 40px;
+      height: 1px;
+      background: var(--muted);
+    }
+
+    .hero-btn {
+      margin-top: 40px;
+      border: 1px solid rgba(255,255,255,0.4);
+      background: transparent;
+      color: var(--white);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 14px 36px;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: background 0.2s, border-color 0.2s;
+      display: inline-block;
+    }
+    .hero-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.7); }
+
+    /* hidden data wrapper */
+    #data-wrapper {
+      display: none;
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    #data-wrapper.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── SHARED SECTION ── */
+    .section {
+      padding: 120px 60px;
+      border-top: 1px solid var(--line);
+    }
+    .section-alt { background: var(--navy-mid); }
+
+    .sec-num {
+      font-size: clamp(6rem, 14vw, 11rem);
+      font-weight: 900;
+      color: rgba(255,255,255,0.05);
+      letter-spacing: -0.05em;
+      line-height: 1;
+      margin-bottom: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .sec-eyebrow {
+      font-size: 0.68rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .sec-title {
+      font-size: clamp(1.6rem, 3vw, 2.4rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 52px;
+    }
+
+    /* ── INLINE STATS ── */
+    .stats-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 48px 72px;
+    }
+    .stat .st-label {
+      font-size: 0.67rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .stat .st-val {
+      font-size: 2.6rem;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      color: var(--white);
+    }
+    .stat .st-unit { font-size: 1rem; font-weight: 400; color: var(--muted); margin-left: 3px; }
+    .stat .st-sub  { font-size: 0.72rem; color: var(--muted); margin-top: 8px; }
+
+    /* ── CONTROLS ── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 36px;
+    }
+    .btn-outline {
+      border: 1px solid rgba(255,255,255,0.3);
+      background: transparent;
+      color: var(--white);
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 10px 26px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.55); }
+    .btn-outline:disabled { opacity: 0.3; cursor: not-allowed; }
+    #status-msg { font-size: 0.78rem; color: var(--muted); }
+    #status-msg.running { color: #f59e0b; }
+    #status-msg.error   { color: #f87171; }
+    #status-msg.ok      { color: #4ade80; }
+
+    /* ── CHART ── */
+    .chart-wrap {
+      border: 1px solid var(--line);
+      padding: 28px 28px 20px;
+    }
+    .chart-wrap canvas { max-height: 360px; }
+
+    /* ── FORECAST GRID ── */
+    .fc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1px;
+      background: var(--line);
+    }
+    .fc-cell {
+      background: var(--navy);
+      padding: 32px 32px 28px;
+      transition: background 0.18s;
+    }
+    .section-alt .fc-cell { background: var(--navy-mid); }
+    .fc-cell:hover { background: rgba(255,255,255,0.04); }
+    .fc-month {
+      font-size: 0.67rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .fc-area {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      color: var(--white);
+    }
+    .fc-area span { font-size: 0.9rem; font-weight: 400; color: var(--muted); }
+    .fc-anom { font-size: 0.82rem; font-weight: 600; margin-top: 10px; }
+    .fc-anom.pos { color: #4ade80; }
+    .fc-anom.neg { color: #f87171; }
+    .fc-anom.neu { color: var(--muted); }
+    .fc-ci { font-size: 0.68rem; color: rgba(255,255,255,0.2); margin-top: 5px; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 36px 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .f-logo { font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
+    .f-logo span { opacity: 0.35; }
+    .f-copy { font-size: 0.68rem; color: var(--muted); text-align: right; line-height: 1.7; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Lake Sevan<span>.</span></div>
+  <ul class="nav-links">
+    <li><a href="#stats">Overview</a></li>
+    <li><a href="#chart">Time Series</a></li>
+    <li><a href="#forecast">Forecast</a></li>
+  </ul>
+  <div class="nav-badge">ARM</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <canvas id="mesh-canvas"></canvas>
+  <div class="hero-content">
+    <p class="hero-eyebrow">Satellite · JRC GSW 1984 – 2021 · Landsat 8/9 2022 – Present</p>
+    <h1 class="hero-title">Lake Sevan<br>Surface Monitor</h1>
+    <p class="hero-sub">Multi-decade water-area time series with 12-month SARIMA anomaly forecasting.</p>
+    <button class="hero-btn" onclick="revealData()">Explore Data</button>
+  </div>
+  <div class="scroll-hint" id="scroll-hint" style="display:none">Scroll to explore</div>
+</section>
+
+<div id="data-wrapper">
+<!-- SECTION 01: OVERVIEW STATS -->
+<section class="section" id="stats">
+  <div class="sec-num">01</div>
+  <div class="sec-eyebrow">Dataset Overview</div>
+  <div class="sec-title">Current Conditions</div>
+  <div class="stats-inline">
+    <div class="stat">
+      <div class="st-label">Last Observed Area</div>
+      <div class="st-val" id="s-last-area">—<span class="st-unit"> km²</span></div>
+      <div class="st-sub" id="s-last-date">—</div>
+    </div>
+    <div class="stat">
+      <div class="st-label">Summer Climatology</div>
+      <div class="st-val" id="s-clim">—<span class="st-unit"> km²</span></div>
+      <div class="st-sub">Jun – Sep mean · 1991 – 2020</div>
+    </div>
+    <div class="stat">
+      <div class="st-label">Next Month Forecast</div>
+      <div class="st-val" id="s-next-area">—<span class="st-unit"> km²</span></div>
+      <div class="st-sub" id="s-next-anom">—</div>
+    </div>
+    <div class="stat">
+      <div class="st-label">Archive Coverage</div>
+      <div class="st-val" id="s-valid">—</div>
+      <div class="st-sub">valid months in dataset</div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 02: TIME SERIES -->
+<section class="section section-alt" id="chart">
+  <div class="sec-num">02</div>
+  <div class="sec-eyebrow">Monthly Surface Area · km²</div>
+  <div class="sec-title">Time Series 1984 – Present</div>
+  <div class="controls">
+    <button class="btn-outline" id="btn-update" onclick="triggerUpdate()">
+      Fetch New Data &amp; Reforecast
+    </button>
+    <span id="status-msg">Ready</span>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="tsChart"></canvas>
+  </div>
+</section>
+
+<!-- SECTION 03: FORECAST -->
+<section class="section" id="forecast">
+  <div class="sec-num">03</div>
+  <div class="sec-eyebrow">SARIMA(1,1,1)(0,1,1)₁₂ · 12 Months Ahead</div>
+  <div class="sec-title">Anomaly Forecast</div>
+  <div class="fc-grid" id="forecast-grid">
+    <div class="fc-cell"><div class="fc-month">Loading...</div></div>
+  </div>
+</section>
+
+</div><!-- /data-wrapper -->
+
+<!-- FOOTER -->
+<footer>
+  <div class="f-logo">Lake Sevan<span>.</span></div>
+  <div class="f-copy">
+    JRC Global Surface Water v1.4 · Pekel et al. 2016, Nature 540, 418–422<br>
+    © European Commission / Copernicus Programme · Landsat 8/9 via Google Earth Engine
+  </div>
+</footer>
+
+<script>
+/* ── Interactive mesh ── */
+(function () {
+  const cv  = document.getElementById("mesh-canvas");
+  const ctx = cv.getContext("2d");
+  let W, H, pts, t = 0;
+  const mouse  = { x: -9999, y: -9999 };
+  const LINK_D  = 160;
+  const REPEL_R = 130;
+  const REPEL_F = 5;
+  const FLOAT_A = 8;    // float amplitude (px around origin)
+  const SNAP    = 0.06; // spring strength back to origin
+  const DAMP    = 0.82; // velocity damping
+
+  function resize() {
+    W = cv.width  = cv.offsetWidth;
+    H = cv.height = cv.offsetHeight;
+  }
+
+  function init(n) {
+    pts = Array.from({length: n}, () => {
+      const ox = Math.random() * W;
+      const oy = Math.random() * H;
+      return {
+        ox, oy,           // fixed home position
+        x: ox, y: oy,    // current position
+        vx: 0, vy: 0,    // velocity from mouse push
+        phase: Math.random() * Math.PI * 2,   // unique float phase
+        freq:  0.3 + Math.random() * 0.4,     // float speed
+      };
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    t += 0.012;
+
+    for (const p of pts) {
+      // Gentle float around origin
+      const floatX = p.ox + Math.sin(t * p.freq + p.phase) * FLOAT_A;
+      const floatY = p.oy + Math.cos(t * p.freq * 0.7 + p.phase) * FLOAT_A;
+
+      // Mouse repulsion
+      const mdx = p.x - mouse.x;
+      const mdy = p.y - mouse.y;
+      const md  = Math.sqrt(mdx * mdx + mdy * mdy);
+      if (md < REPEL_R && md > 0) {
+        const force = (REPEL_R - md) / REPEL_R;
+        p.vx += (mdx / md) * force * REPEL_F;
+        p.vy += (mdy / md) * force * REPEL_F;
+      }
+
+      // Spring back toward float target (not hard origin)
+      p.vx += (floatX - p.x) * SNAP;
+      p.vy += (floatY - p.y) * SNAP;
+
+      // Damping
+      p.vx *= DAMP;
+      p.vy *= DAMP;
+
+      p.x += p.vx;
+      p.y += p.vy;
+    }
+
+    // Lines
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[i].x - pts[j].x;
+        const dy = pts[i].y - pts[j].y;
+        const d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < LINK_D) {
+          ctx.beginPath();
+          ctx.moveTo(pts[i].x, pts[i].y);
+          ctx.lineTo(pts[j].x, pts[j].y);
+          ctx.strokeStyle = `rgba(90,140,255,${0.55 * (1 - d / LINK_D)})`;
+          ctx.lineWidth   = 0.7;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Dots
+    for (const p of pts) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(130,170,255,0.6)";
+      ctx.fill();
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  const hero = cv.parentElement;
+  hero.addEventListener("mousemove", e => {
+    const r = cv.getBoundingClientRect();
+    mouse.x = e.clientX - r.left;
+    mouse.y = e.clientY - r.top;
+  });
+  hero.addEventListener("mouseleave", () => { mouse.x = -9999; mouse.y = -9999; });
+
+  window.addEventListener("resize", () => { resize(); init(90); });
+  resize(); init(90); draw();
+})();
+
+/* ── Reveal ── */
+function revealData() {
+  const wrapper = document.getElementById("data-wrapper");
+  const hint    = document.getElementById("scroll-hint");
+  wrapper.style.display = "block";
+  // force reflow so transition fires
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      wrapper.classList.add("visible");
+      hint.style.display = "flex";
+      setTimeout(() => {
+        wrapper.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    });
+  });
+  // swap button text
+  document.querySelector(".hero-btn").textContent = "Refreshing...";
+  document.querySelector(".hero-btn").disabled = true;
+  loadData().then(() => {
+    document.querySelector(".hero-btn").textContent = "Data Loaded";
+  });
+}
+
+/* ── Data ── */
+let tsChart = null;
+
+async function loadData() {
+  const res  = await fetch("/api/data");
+  const data = await res.json();
+  if (data.error) { setStatus(data.error, "error"); return; }
+
+  const s = data.summary;
+  document.getElementById("s-last-area").innerHTML  = `${s.last_obs_area}<span class="st-unit"> km²</span>`;
+  document.getElementById("s-last-date").textContent = s.last_obs_date;
+  document.getElementById("s-clim").innerHTML        = `${s.clim_summer_mean}<span class="st-unit"> km²</span>`;
+  document.getElementById("s-valid").textContent     = `${s.valid_months} / ${s.total_months}`;
+
+  const next = data.forecast[0];
+  document.getElementById("s-next-area").innerHTML = `${(+next.area_km2).toFixed(1)}<span class="st-unit"> km²</span>`;
+  const a = +next.anomaly_km2;
+  const anomEl = document.getElementById("s-next-anom");
+  anomEl.textContent = `${a >= 0 ? "+" : ""}${a.toFixed(1)} km² vs normal · ${next.date}`;
+  anomEl.style.color = a > 10 ? "#4ade80" : a < -10 ? "#f87171" : "rgba(255,255,255,0.4)";
+
+  renderChart(data.timeseries, data.forecast);
+  renderForecast(data.forecast);
+}
+
+function renderChart(ts, forecast) {
+  const labels  = ts.map(d => d.date.slice(0, 7));
+  const areas   = ts.map(d => d.area_km2);
+  const fLabels = forecast.map(d => d.date);
+  const fAreas  = forecast.map(d => +d.area_km2.toFixed(1));
+  const fLow    = forecast.map(d => +d.ci_lower_95.toFixed(1));
+  const fHigh   = forecast.map(d => +d.ci_upper_95.toFixed(1));
+  const all     = [...labels, ...fLabels];
+  const obs     = [...areas,  ...Array(fLabels.length).fill(null)];
+  const fD      = [...Array(labels.length).fill(null), ...fAreas];
+  const fLo     = [...Array(labels.length).fill(null), ...fLow];
+  const fHi     = [...Array(labels.length).fill(null), ...fHigh];
+
+  if (tsChart) tsChart.destroy();
+  tsChart = new Chart(document.getElementById("tsChart").getContext("2d"), {
+    type: "line",
+    data: {
+      labels: all,
+      datasets: [
+        { label: "Observed",   data: obs, borderColor: "rgba(100,160,255,0.85)", backgroundColor: "transparent", pointRadius: 1.5, borderWidth: 1.5, tension: 0.1, spanGaps: false },
+        { label: "Forecast",   data: fD,  borderColor: "#ffffff", backgroundColor: "transparent", pointRadius: 3, borderWidth: 1.5, borderDash: [5,4], tension: 0.2, spanGaps: false },
+        { label: "95% CI",     data: fHi, borderColor: "transparent", backgroundColor: "rgba(255,255,255,0.06)", pointRadius: 0, fill: "+1", tension: 0.2 },
+        { label: "_lo",        data: fLo, borderColor: "transparent", backgroundColor: "transparent", pointRadius: 0, fill: false },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { labels: { color: "rgba(255,255,255,0.35)", font: { size: 11 }, filter: i => i.text !== "_lo" } },
+        tooltip: { backgroundColor: "#0a1628", titleColor: "#fff", bodyColor: "rgba(255,255,255,0.55)", borderColor: "rgba(255,255,255,0.08)", borderWidth: 1 },
+      },
+      scales: {
+        x: { ticks: { color: "rgba(255,255,255,0.2)", maxTicksLimit: 10, maxRotation: 0 }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: { title: { display: true, text: "km²", color: "rgba(255,255,255,0.25)" }, ticks: { color: "rgba(255,255,255,0.2)" }, grid: { color: "rgba(255,255,255,0.04)" } },
+      },
+    },
+  });
+}
+
+function renderForecast(forecast) {
+  document.getElementById("forecast-grid").innerHTML = forecast.map(r => {
+    const a   = +r.anomaly_km2;
+    const cls = a > 10 ? "pos" : a < -10 ? "neg" : "neu";
+    const sgn = a >= 0 ? "+" : "";
+    return `<div class="fc-cell">
+      <div class="fc-month">${r.date}</div>
+      <div class="fc-area">${(+r.area_km2).toFixed(1)}<span> km²</span></div>
+      <div class="fc-anom ${cls}">${sgn}${a.toFixed(1)} km² vs normal</div>
+      <div class="fc-ci">[${(+r.ci_lower_95).toFixed(0)}, ${(+r.ci_upper_95).toFixed(0)}] km²  95% CI</div>
+    </div>`;
+  }).join("");
+}
+
+/* ── Update ── */
+async function triggerUpdate() {
+  const btn = document.getElementById("btn-update");
+  btn.disabled = true;
+  setStatus("Requesting update...", "running");
+  await fetch("/api/update", { method: "POST" });
+  const iv = setInterval(async () => {
+    const d = await (await fetch("/api/status")).json();
+    if (d.error) { setStatus(`Error: ${d.error}`, "error"); btn.disabled = false; clearInterval(iv); return; }
+    setStatus(d.message, d.running ? "running" : "");
+    if (!d.running && d.message === "Done") {
+      clearInterval(iv);
+      btn.disabled = false;
+      setStatus("Done — refreshing...", "ok");
+      await loadData();
+      setStatus("Ready", "");
+    }
+  }, 2000);
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById("status-msg");
+  el.textContent = msg;
+  el.className   = cls || "";
+}
+
+// data loads on button press via revealData()
+</script>
+</body>
+</html>
