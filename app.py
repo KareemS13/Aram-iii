@@ -194,7 +194,8 @@ def main():
     args = parser.parse_args()
 
     GEE_PROJECT = args.project
-    app.run(host="0.0.0.0", port=args.port, debug=args.debug)
+    port = int(os.environ.get("PORT", args.port))
+    app.run(host="0.0.0.0", port=port, debug=args.debug)
 
 
 if __name__ == "__main__":
