@@ -78,13 +78,26 @@ log = logging.getLogger(__name__)
 def initialize_gee(project=None):
     """Authenticate and initialise GEE; return (ee module, AOI geometry)."""
     import ee  # deferred so --forecast-only skips the GEE import entirely
-    try:
-        ee.Initialize(project=project)
-        log.info("GEE initialised (project=%s)", project or "legacy")
-    except Exception:
-        log.info("GEE token missing — launching browser authentication...")
-        ee.Authenticate()
-        ee.Initialize(project=project)
+    import os, json, tempfile
+
+    sa_json_str = os.environ.get("GEE_SERVICE_ACCOUNT_JSON")
+    if sa_json_str:
+        sa_info = json.loads(sa_json_str)
+        sa_email = sa_info["client_email"]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(sa_info, f)
+            key_file = f.name
+        credentials = ee.ServiceAccountCredentials(sa_email, key_file)
+        ee.Initialize(credentials, project=project)
+        log.info("GEE initialised via service account (project=%s)", project or "legacy")
+    else:
+        try:
+            ee.Initialize(project=project)
+            log.info("GEE initialised (project=%s)", project or "legacy")
+        except Exception:
+            log.info("GEE token missing — launching browser authentication...")
+            ee.Authenticate()
+            ee.Initialize(project=project)
 
     bounds = CONFIG["aoi_bounds"]
     aoi = ee.Geometry.Rectangle(bounds)
