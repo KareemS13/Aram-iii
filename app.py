@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 app = Flask(__name__)
 
 BASE_DIR   = pathlib.Path(__file__).parent
-GEE_PROJECT = None  # set at startup via --project
+GEE_PROJECT = "ee-kareemsaffarini9"  # default GEE Cloud project ID
 
 # Shared state for background update job
 _update_status = {"running": False, "message": "Idle", "error": None}
@@ -187,7 +187,7 @@ def api_data():
 def main():
     global GEE_PROJECT
     parser = argparse.ArgumentParser(description="Lake Sevan Flask dashboard")
-    parser.add_argument("--project", type=str, default=None,
+    parser.add_argument("--project", type=str, default="ee-kareemsaffarini9",
                         help="GEE Cloud project ID")
     parser.add_argument("--port",    type=int, default=5000)
     parser.add_argument("--debug",   action="store_true")

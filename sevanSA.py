@@ -671,7 +671,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Lake Sevan surface-area time series & SARIMA forecast"
     )
-    parser.add_argument("--project",       type=str,          default=None,
+    parser.add_argument("--project",       type=str,          default="ee-kareemsaffarini9",
                         help="GEE Cloud project ID")
     parser.add_argument("--no-cache",      action="store_true",
                         help="Force re-download from GEE even if CSV exists")
