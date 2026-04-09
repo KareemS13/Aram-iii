@@ -1,0 +1,101 @@
+name: Refresh Lake Sevan Data
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"   # 3 AM UTC on the 1st of every month
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write GEE service account key
+        run: echo '${{ secrets.GEE_SERVICE_ACCOUNT_JSON }}' > /tmp/gee_key.json
+
+      - name: Fetch latest Landsat data & update forecast
+        env:
+          GEE_SERVICE_ACCOUNT_JSON: ${{ secrets.GEE_SERVICE_ACCOUNT_JSON }}
+          GEE_PROJECT: ${{ secrets.GEE_PROJECT }}
+        run: |
+          python - <<'EOF'
+          import os
+          import sevanSA
+
+          project = os.environ.get("GEE_PROJECT", "ee-kareemsaffarini9")
+          ee, aoi = sevanSA.initialize_gee(project=project)
+
+          import json
+          from pathlib import Path
+
+          meta_path = Path(sevanSA.CONFIG["metadata_json"])
+          total_pixels = None
+          if meta_path.exists():
+              try:
+                  total_pixels = json.loads(meta_path.read_text()).get("total_pixels")
+              except Exception:
+                  pass
+          if total_pixels is None:
+              total_pixels = sevanSA.get_aoi_total_pixels(ee, aoi)
+
+          # JRC data (cached — only re-fetches if collection grows)
+          jrc_df = sevanSA.extract_monthly_areas(
+              ee, aoi, total_pixels,
+              cache_path=Path(sevanSA.CONFIG["cache_csv"]),
+              metadata_path=meta_path,
+              force_refresh=False,
+          )
+
+          # Landsat 2022-present (incremental — only fetches new months)
+          landsat_df = sevanSA.extract_landsat_monthly_areas(
+              ee, aoi, total_pixels,
+              start_date="2022-01-01",
+              cache_path=Path(sevanSA.CONFIG["landsat_cache_csv"]),
+              force_refresh=False,
+          )
+
+          # Build time series + forecast
+          raw_df = sevanSA.combine_jrc_landsat(jrc_df, landsat_df)
+          df = sevanSA.build_complete_timeseries(raw_df)
+          clim, clim_std, anomaly = sevanSA.compute_climatology(df)
+          _, forecast_df = sevanSA.fit_sarima(
+              df, clim,
+              order=sevanSA.CONFIG["sarima_order"],
+              seasonal_order=sevanSA.CONFIG["sarima_seasonal"],
+              train_start_year=sevanSA.CONFIG["sarima_start_year"],
+              n_forecast=sevanSA.CONFIG["n_forecast"],
+          )
+
+          # Save updated plot
+          sevanSA.plot_timeseries(
+              df, clim, clim_std, anomaly, forecast_df,
+              output_path=Path(sevanSA.CONFIG["output_png"]),
+              show=False,
+          )
+
+          print(f"Last observation: {df[df['quality_flag']=='good']['date'].max().date()}")
+          print(f"Next month forecast: {forecast_df.iloc[0]['date'].strftime('%Y-%m')} = {forecast_df.iloc[0]['area_km2']:.1f} km2")
+          EOF
+
+      - name: Commit updated data & plot
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sevan_monthly_area.csv sevan_landsat_2022.csv sevan_metadata.json sevan_surface_area.png
+          git diff --cached --quiet || git commit -m "chore: refresh Lake Sevan data [$(date -u +%Y-%m)]"
+          git push
