@@ -29,7 +29,7 @@ CONFIG = {
     "collection":         "JRC/GSW1_4/MonthlyHistory",
     "scale_m":            30,
     "min_coverage":       0.50,    # fraction of AOI observed; below -> NaN
-    "sarima_order":       (1, 1, 1),
+    "sarima_order":       (0, 1, 2),
     "sarima_seasonal":    (0, 1, 1, 12),
     "sarima_start_year":  1998,    # skip 1988-1997 Caucasus data gap
     "clim_ref_start":     "1991-01",
