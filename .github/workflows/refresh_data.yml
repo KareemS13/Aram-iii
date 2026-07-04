@@ -96,6 +96,11 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add sevan_monthly_area.csv sevan_landsat_2022.csv sevan_metadata.json sevan_surface_area.png
-          git diff --cached --quiet || git commit -m "chore: refresh Lake Sevan data [$(date -u +%Y-%m)]"
+          # Always record when this run happened. This guarantees at least one
+          # commit every month, which resets GitHub's 60-day "repository
+          # inactivity" timer and stops it from auto-disabling this schedule
+          # (even in months with no new Landsat data to commit).
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > sevan_last_refresh.txt
+          git add sevan_monthly_area.csv sevan_landsat_2022.csv sevan_metadata.json sevan_surface_area.png sevan_last_refresh.txt
+          git commit -m "chore: refresh Lake Sevan data [$(date -u +%Y-%m)]"
           git push
